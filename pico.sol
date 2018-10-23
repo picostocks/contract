@@ -200,7 +200,8 @@ contract PicoStocksAsset is StandardToken {
     uint64 firstbid=0; // key of highest bid
     uint64 lastbid=0;  // key of last inserted bid
 
-    address public constant custodian = 0xd720a4768CACE6d508d8B390471d83BA3aE6dD32;
+    //address public constant custodian = 0xd720a4768CACE6d508d8B390471d83BA3aE6dD32; DEBUG
+    address public constant custodian = 0x004cDcAeB1dCB35CbE63f0f62B00Fe261036d0Bf; //DEBUG
     uint public constant minPrice  = 0xFFFF;                             // min price per token
     uint public constant maxPrice  = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF; // max price per token
     uint public constant maxTokens = 0xFFFFFFFFFFFFFFFFFFFFFFFF;         // max number of tokens
@@ -210,8 +211,9 @@ contract PicoStocksAsset is StandardToken {
     uint public investStart; // first block of funding round
     uint public investEnd;   // last block of funding round
     uint public investGot;   // funding collected
-    uint public investMin;   // maximum funding
+    uint public investMin;   // minimum funding
     uint public investMax;   // maximum funding
+    uint public investKYC;   // KYC requirement
 
     //dividends
     uint[] public dividends; // dividens collected per period, growing array
@@ -236,6 +238,7 @@ contract PicoStocksAsset is StandardToken {
     event LogCancelBuy(address indexed who, uint amount, uint price);
     event LogCancelSell(address indexed who, uint amount, uint price);
     event LogTransaction(address indexed from, address indexed to, uint amount, uint price);
+    event LogDeposit(address indexed who,uint amount);
     event LogWithdraw(address indexed who,uint amount);
     event LogPayment(address indexed who, address from, uint amount);
     event LogDividend(uint amount);
@@ -263,10 +266,11 @@ contract PicoStocksAsset is StandardToken {
      * @param _to block number of end of funding round
      * @param _min minimum number of tokens to sell
      * @param _max maximum number of tokens to sell
+     * @param _kyc require KYC during first investment round
      * @param _picoid asset id on picostocks
      * @param _symbol asset symmbol on picostocks
      */
-    constructor(uint _tokens,uint _price,uint _from,uint _to,uint _min,uint _max,uint _picoid,string _symbol) public {
+    constructor(uint _tokens,uint _price,uint _from,uint _to,uint _min,uint _max,uint _kyc,uint _picoid,string _symbol) public {
         owner = msg.sender;
         if(_tokens==0){
             _tokens=1;
@@ -275,7 +279,7 @@ contract PicoStocksAsset is StandardToken {
         users[owner].tokens = uint120(_tokens);
         users[owner].lastProposalID = uint32(proposalID);
         if(_price > 0){
-            setFirstInvestPeriod(_price,_from,_to,_min,_max);
+            setFirstInvestPeriod(_price,_from,_to,_min,_max,_kyc);
         }
         picoid = _picoid;
         symbol = _symbol;
@@ -292,14 +296,26 @@ contract PicoStocksAsset is StandardToken {
      * @param _to block number of end of funding round
      * @param _min minimum number of tokens to sell
      * @param _max maximum number of tokens to sell
+     * @param _kyc require KYC during first investment round
      */
-    function setFirstInvestPeriod(uint _price,uint _from,uint _to,uint _min,uint _max) public onlyOwner {
+    function setFirstInvestPeriod(uint _price,uint _from,uint _to,uint _min,uint _max,uint _kyc) public onlyOwner {
         require(investPrice == 0 && block.number < _from && _from < _to && _to < _from + 4*60*24*100 && _price > minPrice && _price < maxPrice && _max > 0 && _max > _min && _max < maxTokens );
         investPrice = _price;
         investStart = _from;
         investEnd = _to;
         investMin = _min;
         investMax = _max;
+        investKYC = _kyc;
+    }
+
+    /**
+     * @dev Accept address for first investment
+     * @param _who accepted address (investor)
+     */
+    function acceptKYC(address _who) external onlyOwner {
+        if(users[_who].lastProposalID==0){
+          users[_who].lastProposalID=1;
+        }
     }
 
     /**
@@ -307,16 +323,17 @@ contract PicoStocksAsset is StandardToken {
      */
     function invest() payable public {
         commitDividend(msg.sender);
-        require(msg.value > 0 && block.number >= investStart && block.number < investEnd && totalSupply < investMax && proposalPrice > 0);
-        uint tokens = msg.value / proposalPrice;
+        require(msg.value > 0 && block.number >= investStart && block.number < investEnd && totalSupply < investMax && investPrice > 0);
+        uint tokens = msg.value / investPrice;
         if(investMax < totalSupply.add(tokens)){
             tokens = investMax.sub(totalSupply);
         }
         totalSupply += tokens;
         users[msg.sender].tokens += uint120(tokens);
         emit Transfer(address(0),msg.sender,tokens);
-        uint value = msg.value.sub(tokens * proposalPrice);
+        uint value = msg.value.sub(tokens * investPrice);
         if(value > 0){ // send back excess funds immediately
+            emit LogWithdraw(msg.sender,value);
             require(msg.sender.call.value(value)());
         }
     }
@@ -399,17 +416,19 @@ contract PicoStocksAsset is StandardToken {
         investEnd = block.number + 4*60*24*28;
         investPrice = _price; // too high price will disable future investments
         investMax = totalSupply + _tokens;
+        investKYC=0;
     }
 
     /**
      * @dev Finish funding round and update voting power
      */
     function closeInvestPeriod() public {
-        require(block.number>investEnd && investStart>0 && investPrice>0 && investMax>0);
+        require(block.number>investEnd && investStart>0 && investPrice>0 && investMax>0); //TODO test for totalSupply>=investMax as alternative to investEnd
         proposalID ++ ;
         totalVotes=totalSupply;
         investStart=0;
         investMax=0;
+        investKYC=0;
     }
 
     /**
@@ -437,6 +456,7 @@ contract PicoStocksAsset is StandardToken {
      */
     function commitDividend(address _who) internal {
         uint last = users[_who].lastProposalID;
+        require(investKYC==0 || last>0); // only authorized investors during KYC period
         uint tokens=users[_who].tokens+users[_who].asks;
         if((tokens==0) || (last==0)){
             users[_who].lastProposalID=uint32(proposalID);
@@ -474,7 +494,7 @@ contract PicoStocksAsset is StandardToken {
 
     /**
      * @dev Change the official www address
-     * @param _who The new www address
+     * @param _www The new www address
      */
     function changeWww(string _www) external onlyOwner {
         www=_www;
@@ -483,9 +503,11 @@ contract PicoStocksAsset is StandardToken {
 
     /**
      * @dev Execute a call
-     * @param _who The call data
+     * @param _to destination address
+     * @param _data The call data
      */
     function exec(address _to,bytes _data) payable external onlyOwner {
+        emit LogWithdraw(_to,msg.value);
         require(_to.call.value(msg.value)(_data));
     }
 
@@ -529,7 +551,7 @@ contract PicoStocksAsset is StandardToken {
     /**
      * @dev Vote in favor of the current proposal
      */
-    function voteYes() external {
+    function voteYes() public {
         commitDividend(msg.sender);
         require(users[msg.sender].voted == 0 && proposalBlock + 4*60*24*28 > block.number && proposalBlock > 0);
         users[msg.sender].voted=1;
@@ -539,7 +561,7 @@ contract PicoStocksAsset is StandardToken {
     /**
      * @dev Vote against the current proposal
      */
-    function voteNo() external {
+    function voteNo() public {
         commitDividend(msg.sender);
         require(users[msg.sender].voted == 0 && proposalBlock + 4*60*24*28 > block.number && proposalBlock > 0);
         users[msg.sender].voted=1;
@@ -570,6 +592,7 @@ contract PicoStocksAsset is StandardToken {
     function deposit() payable external {
         users[msg.sender].weis += uint120(msg.value);
         totalWeis += msg.value;
+        emit LogDeposit(msg.sender,msg.value);
     }
 
     /**
@@ -588,6 +611,7 @@ contract PicoStocksAsset is StandardToken {
         users[msg.sender].weis = uint120(uint(users[msg.sender].weis).sub(amount));
         totalWeis = totalWeis.sub(amount);
         //msg.sender.transfer(amount);
+        emit LogWithdraw(msg.sender,amount);
         require(msg.sender.call.value(amount)());
     }
 
