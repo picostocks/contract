@@ -10,27 +10,27 @@ library SafeMath {
     require(c >= a);
     return c;
   }
-  function mul(uint a, uint b) internal pure returns (uint) {
+  /*function mul(uint a, uint b) internal pure returns (uint) {
     if (a == 0) {
       return 0;
     }
     uint c = a * b;
     require(c / a == b);
     return c;
-  }
+  }*/
 }
 
 contract ERC20Basic {
   uint public totalSupply;
   address public owner; //owner
-  function balanceOf(address who) public constant returns (uint);
+  function balanceOf(address who) public view returns (uint);
   function transfer(address to, uint value) public;
   event Transfer(address indexed from, address indexed to, uint value);
-  function commitDividend(address who) internal; // pays remaining dividend
+  function commitDividend(address who) public; // pays remaining dividend
 }
 
 contract ERC20 is ERC20Basic {
-  function allowance(address owner, address spender) public constant returns (uint);
+  function allowance(address owner, address spender) public view returns (uint);
   function transferFrom(address from, address to, uint value) public;
   function approve(address spender, uint value) public;
   event Approval(address indexed owner, address indexed spender, uint value);
@@ -78,7 +78,7 @@ contract BasicToken is ERC20Basic {
   * @param _owner The address to query.
   * @return An uint representing the amount owned by the passed address.
   */
-  function balanceOf(address _owner) public constant returns (uint) {
+  function balanceOf(address _owner) public view returns (uint) {
     return uint(users[_owner].tokens);
   }
   /**
@@ -86,7 +86,7 @@ contract BasicToken is ERC20Basic {
   * @param _owner The address to query.
   * @return An uint representing the amount offered by the passed address.
   */
-  function askOf(address _owner) public constant returns (uint) {
+  function askOf(address _owner) public view returns (uint) {
     return uint(users[_owner].asks);
   }
   /**
@@ -94,7 +94,7 @@ contract BasicToken is ERC20Basic {
   * @param _owner The address to query.
   * @return An uint representing the amount offered by the passed address.
   */
-  function voteOf(address _owner) public constant returns (uint) {
+  function voteOf(address _owner) public view returns (uint) {
     return uint(users[_owner].votes);
   }
   /**
@@ -102,7 +102,7 @@ contract BasicToken is ERC20Basic {
   * @param _owner The address to query.
   * @return An uint representing the amount wei stored in contract.
   */
-  function weiOf(address _owner) public constant returns (uint) {
+  function weiOf(address _owner) public view returns (uint) {
     return uint(users[_owner].weis);
   }
   /**
@@ -110,7 +110,7 @@ contract BasicToken is ERC20Basic {
   * @param _owner The address to query.
   * @return An uint representing the id of last processed proposal period
   */
-  function lastOf(address _owner) public constant returns (uint) {
+  function lastOf(address _owner) public view returns (uint) {
     return uint(users[_owner].lastProposalID);
   }
   /**
@@ -118,7 +118,7 @@ contract BasicToken is ERC20Basic {
   * @param _owner The address to query.
   * @return An address proposed as new contract owner / manager
   */
-  function ownerOf(address _owner) public constant returns (address) {
+  function ownerOf(address _owner) public view returns (address) {
     return users[_owner].owner;
   }
   /**
@@ -126,7 +126,7 @@ contract BasicToken is ERC20Basic {
   * @param _owner The address to query.
   * @return An uint > 0 if user already voted
   */
-  function votedOf(address _owner) public constant returns (uint) {
+  function votedOf(address _owner) public view returns (uint) {
     return uint(users[_owner].voted);
   }
 }
@@ -166,7 +166,7 @@ contract StandardToken is BasicToken, ERC20 {
    * @param _spender address The address which will spend the funds.
    * @return A uint specifing the amount of tokens still avaible for the spender.
    */
-  function allowance(address _owner, address _spender) public constant returns (uint remaining) {
+  function allowance(address _owner, address _spender) public view returns (uint remaining) {
     return allowed[_owner][_spender];
   }
 }
@@ -200,6 +200,8 @@ contract PicoStocksAsset is StandardToken {
     uint64 firstbid=0; // key of highest bid
     uint64 lastbid=0;  // key of last inserted bid
 
+    //uint constant weekBlocks = 4*60*24*7 // DEBUG, number of blocks in 1 week
+    uint constant weekBlocks = 7; // DEBUG, number of blocks in 1 week
     //address public constant custodian = 0xd720a4768CACE6d508d8B390471d83BA3aE6dD32; DEBUG
     address public constant custodian = 0x004cDcAeB1dCB35CbE63f0f62B00Fe261036d0Bf; //DEBUG
     uint public constant minPrice  = 0xFFFF;                             // min price per token
@@ -240,6 +242,7 @@ contract PicoStocksAsset is StandardToken {
     event LogTransaction(address indexed from, address indexed to, uint amount, uint price);
     event LogDeposit(address indexed who,uint amount);
     event LogWithdraw(address indexed who,uint amount);
+    event LogExec(address indexed who,uint amount);
     event LogPayment(address indexed who, address from, uint amount);
     event LogDividend(uint amount);
     event LogDividend(address indexed who, uint amount, uint period);
@@ -270,7 +273,7 @@ contract PicoStocksAsset is StandardToken {
      * @param _picoid asset id on picostocks
      * @param _symbol asset symmbol on picostocks
      */
-    constructor(uint _tokens,uint _price,uint _from,uint _to,uint _min,uint _max,uint _kyc,uint _picoid,string _symbol) public {
+    constructor(uint _tokens,uint _price,uint _from,uint _to,uint _min,uint _max,uint _kyc,uint _picoid,string memory _symbol) public {
         owner = msg.sender;
         if(_tokens==0){
             _tokens=1;
@@ -299,7 +302,7 @@ contract PicoStocksAsset is StandardToken {
      * @param _kyc require KYC during first investment round
      */
     function setFirstInvestPeriod(uint _price,uint _from,uint _to,uint _min,uint _max,uint _kyc) public onlyOwner {
-        require(investPrice == 0 && block.number < _from && _from < _to && _to < _from + 4*60*24*100 && _price > minPrice && _price < maxPrice && _max > 0 && _max > _min && _max < maxTokens );
+        require(investPrice == 0 && block.number < _from && _from < _to && _to < _from + weekBlocks*12 && _price > minPrice && _price < maxPrice && _max > 0 && _max > _min && _max < maxTokens );
         investPrice = _price;
         investStart = _from;
         investEnd = _to;
@@ -331,10 +334,13 @@ contract PicoStocksAsset is StandardToken {
         totalSupply += tokens;
         users[msg.sender].tokens += uint120(tokens);
         emit Transfer(address(0),msg.sender,tokens);
-        uint value = msg.value.sub(tokens * investPrice);
-        if(value > 0){ // send back excess funds immediately
-            emit LogWithdraw(msg.sender,value);
-            require(msg.sender.call.value(value)());
+        uint _value = msg.value.sub(tokens * investPrice);
+        if(_value > 0){ // send back excess funds immediately
+            emit LogWithdraw(msg.sender,_value);
+            require(msg.sender.call.value(_value)());
+        }
+        if(totalSupply>=investMax){
+            closeInvestPeriod();
         }
     }
 
@@ -351,7 +357,7 @@ contract PicoStocksAsset is StandardToken {
     function disinvest() public {
         require(0 < investEnd && investEnd < block.number && totalSupply < investMin);
         payDividend(address(this).balance/totalSupply);
-        investEnd += 4*60*24*28; // enable future dividend payment if contract has funds
+        investEnd += weekBlocks*4; // enable future dividend payment if contract has funds
     }
 
 /* management functions */
@@ -364,7 +370,7 @@ contract PicoStocksAsset is StandardToken {
      * @param _price price of 1 new token
      */
     function propose(uint _dividendpershare,uint _budget,uint _tokens,uint _price) external onlyOwner {
-        require(proposalBlock + 4*60*24*28 < block.number && 0 < investEnd && investEnd < block.number); //can not send more than 1 proposal per 28 days
+        require(proposalBlock + weekBlocks*4 < block.number && 0 < investEnd && investEnd < block.number); //can not send more than 1 proposal per 28 days
         if(block.number>investEnd && investStart>0 && investPrice>0 && investMax>0){
           totalVotes=totalSupply;
           investStart=0;
@@ -373,6 +379,7 @@ contract PicoStocksAsset is StandardToken {
         proposalVotesYes=0;
         proposalVotesNo=0;
         proposalID=proposalID+1;
+        dividends.push(0);
         proposalBlock=block.number;
         proposalDividendPerShare=_dividendpershare;
         proposalBudget=_budget;
@@ -385,7 +392,8 @@ contract PicoStocksAsset is StandardToken {
      * @dev Execute proposed plan if passed
      */
     function executeProposal() public {
-        require(proposalVotesYes > 0 && proposalBlock + 4*60*24*28 < block.number);
+        require(proposalVotesYes > 0 && (proposalBlock + weekBlocks*4 < block.number || proposalVotesYes>totalVotes/2 || proposalVotesNo>totalVotes/2)); //CHANGED
+        //old require(proposalVotesYes > 0);
         emit LogVotes(proposalVotesYes,proposalVotesNo);
         if(proposalVotesYes >= proposalVotesNo && (proposalTokens==0 || proposalPrice>=investPrice || proposalVotesYes>totalVotes/2)){
           if(payDividend(proposalDividendPerShare) > 0){
@@ -397,6 +405,7 @@ contract PicoStocksAsset is StandardToken {
           emit LogAccepted(proposalDividendPerShare,proposalBudget,proposalTokens,proposalPrice);}
         else{
           emit LogRejected(proposalDividendPerShare,proposalBudget,proposalTokens,proposalPrice);}
+        proposalBlock=0; //ADDED
         proposalVotesYes=0;
         proposalVotesNo=0;
         proposalDividendPerShare=0;
@@ -412,8 +421,8 @@ contract PicoStocksAsset is StandardToken {
      */
     function setNextInvestPeriod(uint _price,uint _tokens) internal {
         require(totalSupply >= investMin && _price < maxPrice && totalSupply + _tokens < 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF);
-        investStart = block.number + 4*60*24*14;
-        investEnd = block.number + 4*60*24*28;
+        investStart = block.number + weekBlocks*2;
+        investEnd = block.number + weekBlocks*4;
         investPrice = _price; // too high price will disable future investments
         investMax = totalSupply + _tokens;
         investKYC=0;
@@ -423,8 +432,9 @@ contract PicoStocksAsset is StandardToken {
      * @dev Finish funding round and update voting power
      */
     function closeInvestPeriod() public {
-        require(block.number>investEnd && investStart>0 && investPrice>0 && investMax>0); //TODO test for totalSupply>=investMax as alternative to investEnd
+        require((block.number>investEnd || totalSupply>=investMax) && investStart>0 && investPrice>0 && investMax>0);
         proposalID ++ ;
+        dividends.push(0);
         totalVotes=totalSupply;
         investStart=0;
         investMax=0;
@@ -438,13 +448,16 @@ contract PicoStocksAsset is StandardToken {
     function payDividend(uint _wei) internal returns (uint) {
         if(_wei == 0){
           return 1;}
-        uint newdividend = _wei.mul(totalSupply);
+        //uint newdividend = _wei.mul(totalSupply);
+        uint newdividend = _wei * totalSupply;
+        require(newdividend / _wei == totalSupply);
         if(address(this).balance < newdividend.add(totalWeis)){
           emit LogDividend(0); //indicates failure
           return 0;}
         totalWeis += newdividend;
         dividends[proposalID] = _wei;
         proposalID ++ ;
+        dividends.push(0);
         totalVotes=totalSupply;
         emit LogDividend(_wei);
         return(_wei);
@@ -454,7 +467,7 @@ contract PicoStocksAsset is StandardToken {
      * @dev Commit remaining dividends and update votes before transfer of tokens
      * @param _who User to process
      */
-    function commitDividend(address _who) internal {
+    function commitDividend(address _who) public { //CHANGED
         uint last = users[_who].lastProposalID;
         require(investKYC==0 || last>0); // only authorized investors during KYC period
         uint tokens=users[_who].tokens+users[_who].asks;
@@ -465,6 +478,7 @@ contract PicoStocksAsset is StandardToken {
         if(last==proposalID) {
             return;
         }
+//DEBUG, something is wrong here :-(
         if(tokens != users[_who].votes){
             if(users[_who].owner != address(0)){
                 owners[users[_who].owner] = owners[users[_who].owner].add(tokens).sub(uint(users[_who].votes));
@@ -496,7 +510,7 @@ contract PicoStocksAsset is StandardToken {
      * @dev Change the official www address
      * @param _www The new www address
      */
-    function changeWww(string _www) external onlyOwner {
+    function changeWww(string /*calldata*/ _www) external onlyOwner {
         www=_www;
         emit LogNewWww(_www);
     }
@@ -506,8 +520,8 @@ contract PicoStocksAsset is StandardToken {
      * @param _to destination address
      * @param _data The call data
      */
-    function exec(address _to,bytes _data) payable external onlyOwner {
-        emit LogWithdraw(_to,msg.value);
+    function exec(address _to,bytes /*calldata*/ _data) payable external onlyOwner {
+        emit LogExec(_to,msg.value);
         require(_to.call.value(msg.value)(_data));
     }
 
@@ -553,7 +567,7 @@ contract PicoStocksAsset is StandardToken {
      */
     function voteYes() public {
         commitDividend(msg.sender);
-        require(users[msg.sender].voted == 0 && proposalBlock + 4*60*24*28 > block.number && proposalBlock > 0);
+        require(users[msg.sender].voted == 0 && proposalBlock + weekBlocks*4 > block.number && proposalBlock > 0);
         users[msg.sender].voted=1;
         proposalVotesYes+=users[msg.sender].votes;
     }
@@ -563,7 +577,7 @@ contract PicoStocksAsset is StandardToken {
      */
     function voteNo() public {
         commitDividend(msg.sender);
-        require(users[msg.sender].voted == 0 && proposalBlock + 4*60*24*28 > block.number && proposalBlock > 0);
+        require(users[msg.sender].voted == 0 && proposalBlock + weekBlocks*4 > block.number && proposalBlock > 0);
         users[msg.sender].voted=1;
         proposalVotesNo+=users[msg.sender].votes;
     }
@@ -600,6 +614,7 @@ contract PicoStocksAsset is StandardToken {
      * @param _amount Amount of wei to withdraw
      */
     function withdraw(uint _amount) external {
+        commitDividend(msg.sender); //ADDED
         uint amount=_amount;
         if(amount > 0){
            require(users[msg.sender].weis >= amount);
@@ -648,17 +663,19 @@ contract PicoStocksAsset is StandardToken {
      * @param _who Optional address of the user
      * @return An array of uint representing the (filtered) orders, 4 uints per order (id,price,amount,user)
      */
-    function ordersSell(address _who) external view returns (uint[]) {
+    function ordersSell(address _who) external view returns (uint[] memory) {
         uint[] memory ret;
         uint num=firstask;
+        uint id=0;
         for(;asks[num].price>0;num=uint(asks[num].next)){
           if(_who>0 && _who!=asks[num].who){
             continue;
           }
-          ret[4*num+0]=num;
-          ret[4*num+1]=uint(asks[num].price);
-          ret[4*num+2]=uint(asks[num].amount);
-          ret[4*num+3]=uint(asks[num].who);}
+          ret[4*id+0]=num;
+          ret[4*id+1]=uint(asks[num].price);
+          ret[4*id+2]=uint(asks[num].amount);
+          ret[4*id+3]=uint(asks[num].who);
+          id++;}
         return ret;
     }
 
@@ -667,17 +684,19 @@ contract PicoStocksAsset is StandardToken {
      * @param _who Optional address of the user
      * @return An array of uint representing the (filtered) orders, 4 uints per order (id,price,amount,user)
      */
-    function ordersBuy(address _who) external view returns (uint[]) {
+    function ordersBuy(address _who) external view returns (uint[] memory) {
         uint[] memory ret;
         uint num=firstbid;
+        uint id=0;
         for(;bids[num].price>0;num=uint(bids[num].next)){
           if(_who>0 && _who!=bids[num].who){
             continue;
           }
-          ret[4*num+0]=num;
-          ret[4*num+1]=uint(bids[num].price);
-          ret[4*num+2]=uint(bids[num].amount);
-          ret[4*num+3]=uint(bids[num].who);}
+          ret[4*id+0]=num;
+          ret[4*id+1]=uint(bids[num].price);
+          ret[4*id+2]=uint(bids[num].amount);
+          ret[4*id+3]=uint(bids[num].who);
+          id++;}
         return ret;
     }
 
@@ -695,7 +714,7 @@ contract PicoStocksAsset is StandardToken {
             return 0;}
           if(_minprice > 0 && asks[num].price < _minprice){
             continue;}
-          if(_who == bids[num].who){
+          if(_who == asks[num].who){ //FIXED !!!
             return num;}}
     }
 
@@ -911,11 +930,11 @@ contract PicoStocksAsset is StandardToken {
         require(0 < _price && _price < maxPrice && 0 < _amount && _amount < maxTokens && _price <= msg.value);
         commitDividend(msg.sender);
         uint funds=msg.value;
-        totalWeis=totalWeis.add(funds);
         uint amount=_amount;
+        uint value;
         for(;asks[firstask].price>0 && asks[firstask].price<=_price;){
-          uint value=uint(asks[firstask].price)*uint(asks[firstask].amount);
-          uint fee=value >> 9; //0.4% fee
+          value=uint(asks[firstask].price)*uint(asks[firstask].amount);
+          uint fee=value >> 9; //2*0.4% fee
           if(funds>=value+fee+fee && amount>=asks[firstask].amount){
             amount=amount.sub(uint(asks[firstask].amount));
             commitDividend(asks[firstask].who);
@@ -925,7 +944,7 @@ contract PicoStocksAsset is StandardToken {
             users[asks[firstask].who].asks-=asks[firstask].amount;
             users[asks[firstask].who].weis+=uint120(value);
             users[custodian].weis+=uint120(fee);
-            totalWeis=totalWeis.sub(fee);
+            totalWeis=totalWeis.add(value+fee);
             //buyer
             users[msg.sender].tokens+=asks[firstask].amount;
             //clear
@@ -937,11 +956,11 @@ contract PicoStocksAsset is StandardToken {
             continue;}
           if(amount>asks[firstask].amount){
             amount=asks[firstask].amount;}
-          if((funds-funds>>8)<amount*asks[firstask].price){
-            amount=(funds-funds>>8)/asks[firstask].price;}
+          if((funds-(funds>>8))<amount*asks[firstask].price){
+            amount=(funds-(funds>>8))/asks[firstask].price;}
           if(amount>0){
             value=amount*uint(asks[firstask].price);
-            fee=value >> 9; //0.4% fee
+            fee=value >> 9; //2*0.4% fee
             commitDividend(asks[firstask].who);
             funds=funds.sub(value+fee+fee);
             emit LogTransaction(asks[firstask].who,msg.sender,amount,asks[firstask].price);
@@ -949,14 +968,13 @@ contract PicoStocksAsset is StandardToken {
             users[asks[firstask].who].asks-=uint120(amount);
             users[asks[firstask].who].weis+=uint120(value);
             users[custodian].weis+=uint120(fee);
-            totalWeis=totalWeis.sub(fee);
+            totalWeis=totalWeis.add(value+fee);
             asks[firstask].amount=uint96(uint(asks[firstask].amount).sub(amount));
             require(asks[firstask].amount>0);
             //buyer
             users[msg.sender].tokens+=uint120(amount);}
           asks[firstask].prev=0;
           if(funds>0){
-            totalWeis=totalWeis.sub(funds);
             require(msg.sender.call.value(funds)());}
           return;}
         if(firstask>0){ //all orders removed
@@ -975,6 +993,7 @@ contract PicoStocksAsset is StandardToken {
           bids[lastbid].amount=uint96(amount);
           bids[lastbid].who=msg.sender;
           value=amount*_price;
+          totalWeis=totalWeis.add(value);
           funds=funds.sub(value);
           emit LogBuy(msg.sender,amount,_price);
           if(last>0){
@@ -984,7 +1003,6 @@ contract PicoStocksAsset is StandardToken {
           if(bid>0){
             bids[bid].prev=lastbid;}}
         if(funds>0){
-          totalWeis=totalWeis.sub(funds);
           require(msg.sender.call.value(funds)());}
     }
 
