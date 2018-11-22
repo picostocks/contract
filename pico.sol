@@ -248,6 +248,7 @@ contract PicoStocksAsset is StandardToken {
     event LogDividend(address indexed who, uint amount, uint period);
     event LogNextInvestment(uint price,uint amount);
     event LogNewOwner(address indexed who);
+    event LogNewCustodian(address indexed who);
     event LogNewWww(string www);
     event LogProposal(uint dividendpershare,uint budget,uint moretokens,uint minprice);
     event LogVotes(uint proposalVotesYes,uint proposalVotesNo);
@@ -356,7 +357,7 @@ contract PicoStocksAsset is StandardToken {
      */
     function disinvest() public {
         require(0 < investEnd && investEnd < block.number && totalSupply < investMin);
-        payDividend(address(this).balance/totalSupply);
+        payDividend((address(this).balance-totalWeis)/totalSupply); //CHANGED
         investEnd += weekBlocks*4; // enable future dividend payment if contract has funds
     }
 
@@ -392,7 +393,7 @@ contract PicoStocksAsset is StandardToken {
      * @dev Execute proposed plan if passed
      */
     function executeProposal() public {
-        require(proposalVotesYes > 0 && (proposalBlock + weekBlocks*4 < block.number || proposalVotesYes>totalVotes/2 || proposalVotesNo>totalVotes/2)); //CHANGED
+        require(proposalVotesYes > 0 && (proposalBlock + weekBlocks*4 < block.number || proposalVotesYes>totalVotes/2 || proposalVotesNo>totalVotes/2));
         //old require(proposalVotesYes > 0);
         emit LogVotes(proposalVotesYes,proposalVotesNo);
         if(proposalVotesYes >= proposalVotesNo && (proposalTokens==0 || proposalPrice>=investPrice || proposalVotesYes>totalVotes/2)){
@@ -405,7 +406,7 @@ contract PicoStocksAsset is StandardToken {
           emit LogAccepted(proposalDividendPerShare,proposalBudget,proposalTokens,proposalPrice);}
         else{
           emit LogRejected(proposalDividendPerShare,proposalBudget,proposalTokens,proposalPrice);}
-        proposalBlock=0; //ADDED
+        proposalBlock=0;
         proposalVotesYes=0;
         proposalVotesNo=0;
         proposalDividendPerShare=0;
@@ -467,7 +468,7 @@ contract PicoStocksAsset is StandardToken {
      * @dev Commit remaining dividends and update votes before transfer of tokens
      * @param _who User to process
      */
-    function commitDividend(address _who) public { //CHANGED
+    function commitDividend(address _who) public {
         uint last = users[_who].lastProposalID;
         require(investKYC==0 || last>0); // only authorized investors during KYC period
         uint tokens=users[_who].tokens+users[_who].asks;
@@ -478,7 +479,6 @@ contract PicoStocksAsset is StandardToken {
         if(last==proposalID) {
             return;
         }
-//DEBUG, something is wrong here :-(
         if(tokens != users[_who].votes){
             if(users[_who].owner != address(0)){
                 owners[users[_who].owner] = owners[users[_who].owner].add(tokens).sub(uint(users[_who].votes));
@@ -502,6 +502,7 @@ contract PicoStocksAsset is StandardToken {
      * @param _who The address of new owner
      */
     function changeOwner(address _who) external onlyOwner {
+        assert(_who != address(0));
         owner = _who;
         emit LogNewOwner(_who);
     }
@@ -513,6 +514,17 @@ contract PicoStocksAsset is StandardToken {
     function changeWww(string /*calldata*/ _www) external onlyOwner {
         www=_www;
         emit LogNewWww(_www);
+    }
+
+    /**
+     * @dev Change owner
+     * @param _who The address of new owner
+     */
+    function changeCustodian(address _who) external { //CHANGED
+        assert(msg.sender == custodian);
+        assert(_who != address(0));
+        custodian = _who;
+        emit LogNewCustodian(_who);
     }
 
     /**
@@ -604,6 +616,7 @@ contract PicoStocksAsset is StandardToken {
      * @dev Store funds in contract
      */
     function deposit() payable external {
+        commitDividend(msg.sender); //CHANGED
         users[msg.sender].weis += uint120(msg.value);
         totalWeis += msg.value;
         emit LogDeposit(msg.sender,msg.value);
@@ -614,7 +627,7 @@ contract PicoStocksAsset is StandardToken {
      * @param _amount Amount of wei to withdraw
      */
     function withdraw(uint _amount) external {
-        commitDividend(msg.sender); //ADDED
+        commitDividend(msg.sender);
         uint amount=_amount;
         if(amount > 0){
            require(users[msg.sender].weis >= amount);
@@ -663,11 +676,11 @@ contract PicoStocksAsset is StandardToken {
      * @param _who Optional address of the user
      * @return An array of uint representing the (filtered) orders, 4 uints per order (id,price,amount,user)
      */
-    function ordersSell(address _who) external view returns (uint[] memory) {
-        uint[] memory ret;
+    function ordersSell(address _who) external view returns (uint[256] memory) {
+        uint[256] memory ret;
         uint num=firstask;
         uint id=0;
-        for(;asks[num].price>0;num=uint(asks[num].next)){
+        for(;asks[num].price>0 && id<64;num=uint(asks[num].next)){
           if(_who>0 && _who!=asks[num].who){
             continue;
           }
@@ -684,11 +697,11 @@ contract PicoStocksAsset is StandardToken {
      * @param _who Optional address of the user
      * @return An array of uint representing the (filtered) orders, 4 uints per order (id,price,amount,user)
      */
-    function ordersBuy(address _who) external view returns (uint[] memory) {
-        uint[] memory ret;
+    function ordersBuy(address _who) external view returns (uint[256] memory) {
+        uint[256] memory ret;
         uint num=firstbid;
         uint id=0;
-        for(;bids[num].price>0;num=uint(bids[num].next)){
+        for(;bids[num].price>0 && id<64;num=uint(bids[num].next)){
           if(_who>0 && _who!=bids[num].who){
             continue;
           }
