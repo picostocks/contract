@@ -649,16 +649,8 @@ contract PicoStocksAsset is StandardToken {
      * @param _who Address of the user to wire to
      */
     function wire(uint _amount,address _who) external {
-        uint amount=_amount;
-        if(amount > 0){
-           require(users[msg.sender].weis >= amount);
-        }
-        else{
-           require(users[msg.sender].weis > 0);
-           amount=users[msg.sender].weis;
-        }
-        users[msg.sender].weis = uint120(uint(users[msg.sender].weis).sub(amount));
-        users[_who].weis = uint120(uint(users[_who].weis).add(amount));
+        users[msg.sender].weis = uint120(uint(users[msg.sender].weis).sub(_amount));
+        users[_who].weis = uint120(uint(users[_who].weis).add(_amount));
     }
 
     /**
