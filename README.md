@@ -16,6 +16,7 @@ Default ethereum contract for picostocks assets [ERCpico]
 
 The (optimized with solidity 0.4.25) contract deployment requires ca. 7M gas. The constructor requires 3 parameters that can not be changed later:
 -	"tokens": number of tokens assigned initially to the owner of the contract
+-	"budget": initially approved budegt for the owner of the contract available only after succesfull first round
 -	"picoid": asset id on [picostocks.com](https://picostocks.com)
 -	"symbol": asset code on [picostocks.com](https://picostocks.com)
 The last 2 parameters can be ignored if the contract is not used by [picostocks.com](https://picostocks.com). In addition 6 parameters can be provided to automatically initiate the first funding round (ICO):
@@ -26,6 +27,7 @@ The last 2 parameters can be ignored if the contract is not used by [picostocks.
 -	"max": maximum number of tokens to sell (tokens given initially to the owner are included in the calculation)
 -	"kyc": if not zero then an address whitelisting is required for each investor (address)
 if the "price" is not zero the funding round will be programmed. If price equals zero the funding round parameters will be ignored. In this case the first founding round can be started with the "setFirstInvestPeriod" function by providing the 6 arguments.
+
 If the "kyc" parameter is set to a non-zero value then the owner has to call the "acceptKYC" function providing the address of the future investor before the investor can buy tokens.
 To buy tokens the investor calls the "invest" function or just sends ether to the contract. The number of sold tokens will be calculated and transferred to the investor and the remaining funds will be returned in the same call.
 In case the minimum number of tokens are not sold in the first funding round then the contract can not initiate any additional funding rounds and anybody is allowed to call the "disinvest" function. This function will split the funds collected by the contract across the investors proportionally to the number of owned tokens (by calling the "payDividend" function).

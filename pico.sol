@@ -265,6 +265,7 @@ contract PicoStocksAsset is StandardToken {
     /**
      * @dev Contract constructor
      * @param _tokens number of tokens given to admin
+     * @param _budget initial approved budget
      * @param _price price of 1 token in first founding round
      * @param _from block number of start of funding round
      * @param _to block number of end of funding round
@@ -274,12 +275,13 @@ contract PicoStocksAsset is StandardToken {
      * @param _picoid asset id on picostocks
      * @param _symbol asset symmbol on picostocks
      */
-    constructor(uint _tokens,uint _price,uint _from,uint _to,uint _min,uint _max,uint _kyc,uint _picoid,string memory _symbol) public {
+    constructor(uint _tokens,uint _budget,uint _price,uint _from,uint _to,uint _min,uint _max,uint _kyc,uint _picoid,string memory _symbol) public {
         owner = msg.sender;
         if(_tokens==0){
             _tokens=1;
         }
         totalSupply = _tokens;
+        acceptedBudget = _budget;
         users[owner].tokens = uint120(_tokens);
         users[owner].lastProposalID = uint32(proposalID);
         if(_price > 0){
