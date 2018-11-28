@@ -1,4 +1,4 @@
-pragma solidity ^0.4.25;
+pragma solidity ^0.5.0;
 
 library SafeMath {
   function sub(uint a, uint b) internal pure returns (uint) {
@@ -200,13 +200,12 @@ contract PicoStocksAsset is StandardToken {
     uint64 firstbid=0; // key of highest bid
     uint64 lastbid=0;  // key of last inserted bid
 
-    //uint constant weekBlocks = 4*60*24*7 // DEBUG, number of blocks in 1 week
-    uint constant weekBlocks = 7; // DEBUG, number of blocks in 1 week
-    //address public constant custodian = 0xd720a4768CACE6d508d8B390471d83BA3aE6dD32; DEBUG
-    address public constant custodian = 0x004cDcAeB1dCB35CbE63f0f62B00Fe261036d0Bf; //DEBUG
-    uint public constant minPrice  = 0xFFFF;                             // min price per token
-    uint public constant maxPrice  = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF; // max price per token
-    uint public constant maxTokens = 0xFFFFFFFFFFFFFFFFFFFFFFFF;         // max number of tokens
+    uint constant weekBlocks = 4*60*24*7; // number of blocks in 1 week
+    uint constant minPrice  = 0xFFFF;                             // min price per token
+    uint constant maxPrice  = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF; // max price per token
+    uint constant maxTokens = 0xFFFFFFFFFFFFFFFFFFFFFFFF;         // max number of tokens
+
+    address public custodian = 0xd720a4768CACE6d508d8B390471d83BA3aE6dD32;
 
     // investment parameters
     uint public investPrice; // price of 1 token
@@ -284,6 +283,7 @@ contract PicoStocksAsset is StandardToken {
         acceptedBudget = _budget;
         users[owner].tokens = uint120(_tokens);
         users[owner].lastProposalID = uint32(proposalID);
+        users[custodian].lastProposalID = uint32(proposalID);
         if(_price > 0){
             setFirstInvestPeriod(_price,_from,_to,_min,_max,_kyc);
         }
@@ -340,7 +340,8 @@ contract PicoStocksAsset is StandardToken {
         uint _value = msg.value.sub(tokens * investPrice);
         if(_value > 0){ // send back excess funds immediately
             emit LogWithdraw(msg.sender,_value);
-            require(msg.sender.call.value(_value)());
+            (bool success, /*bytes memory _unused*/) = msg.sender.call.value(_value)("");
+            require(success);
         }
         if(totalSupply>=investMax){
             closeInvestPeriod();
@@ -513,7 +514,7 @@ contract PicoStocksAsset is StandardToken {
      * @dev Change the official www address
      * @param _www The new www address
      */
-    function changeWww(string /*calldata*/ _www) external onlyOwner {
+    function changeWww(string calldata _www) external onlyOwner {
         www=_www;
         emit LogNewWww(_www);
     }
@@ -534,9 +535,10 @@ contract PicoStocksAsset is StandardToken {
      * @param _to destination address
      * @param _data The call data
      */
-    function exec(address _to,bytes /*calldata*/ _data) payable external onlyOwner {
+    function exec(address _to,bytes calldata _data) payable external onlyOwner {
         emit LogExec(_to,msg.value);
-        require(_to.call.value(msg.value)(_data));
+        (bool success, /*bytes memory _unused*/) =_to.call.value(msg.value)(_data);
+        require(success);
     }
 
     /**
@@ -549,10 +551,12 @@ contract PicoStocksAsset is StandardToken {
         acceptedBudget=acceptedBudget.sub(_amount); //check for excess withdrawal
         if(_who == address(0)){
           emit LogWithdraw(msg.sender,_amount);
-          require(msg.sender.call.value(_amount)());}
+          (bool success, /*bytes memory _unused*/) = msg.sender.call.value(_amount)("");
+          require(success);}
         else{
           emit LogWithdraw(_who,_amount);
-          require(_who.call.value(_amount)());}
+          (bool success, /*bytes memory _unused*/) = _who.call.value(_amount)("");
+          require(success);}
     }
 
 /* user functions */
@@ -642,7 +646,8 @@ contract PicoStocksAsset is StandardToken {
         totalWeis = totalWeis.sub(amount);
         //msg.sender.transfer(amount);
         emit LogWithdraw(msg.sender,amount);
-        require(msg.sender.call.value(amount)());
+        (bool success, /*bytes memory _unused*/) = msg.sender.call.value(amount)("");
+        require(success);
     }
 
     /**
@@ -675,7 +680,7 @@ contract PicoStocksAsset is StandardToken {
         uint num=firstask;
         uint id=0;
         for(;asks[num].price>0 && id<64;num=uint(asks[num].next)){
-          if(_who>0 && _who!=asks[num].who){
+          if(_who!=address(0) && _who!=asks[num].who){
             continue;
           }
           ret[4*id+0]=num;
@@ -696,7 +701,7 @@ contract PicoStocksAsset is StandardToken {
         uint num=firstbid;
         uint id=0;
         for(;bids[num].price>0 && id<64;num=uint(bids[num].next)){
-          if(_who>0 && _who!=bids[num].who){
+          if(_who!=address(0) && _who!=bids[num].who){
             continue;
           }
           ret[4*id+0]=num;
@@ -900,7 +905,8 @@ contract PicoStocksAsset is StandardToken {
           users[bids[firstbid].who].tokens+=uint120(amount);
           bids[firstbid].prev=0;
           totalWeis=totalWeis.sub(funds);
-          require(msg.sender.call.value(funds)());
+          (bool success, /*bytes memory _unused*/) = msg.sender.call.value(funds)("");
+          require(success);
           return;}
         if(firstbid>0){
           bids[firstbid].prev=0;}
@@ -925,7 +931,8 @@ contract PicoStocksAsset is StandardToken {
             asks[ask].prev=lastask;}}
         if(funds>0){
           totalWeis=totalWeis.sub(funds);
-          require(msg.sender.call.value(funds)());}
+          (bool success, /*bytes memory _unused*/) = msg.sender.call.value(funds)("");
+          require(success);}
     }
 
     /**
@@ -982,7 +989,8 @@ contract PicoStocksAsset is StandardToken {
             users[msg.sender].tokens+=uint120(amount);}
           asks[firstask].prev=0;
           if(funds>0){
-            require(msg.sender.call.value(funds)());}
+            (bool success, /*bytes memory _unused*/) = msg.sender.call.value(funds)("");
+            require(success);}
           return;}
         if(firstask>0){ //all orders removed
           asks[firstask].prev=0;}
@@ -1010,7 +1018,8 @@ contract PicoStocksAsset is StandardToken {
           if(bid>0){
             bids[bid].prev=lastbid;}}
         if(funds>0){
-          require(msg.sender.call.value(funds)());}
+          (bool success, /*bytes memory _unused*/) = msg.sender.call.value(funds)("");
+          require(success);}
     }
 
 }
