@@ -214,7 +214,7 @@ contract PicoStocksAsset is StandardToken {
     uint public investGot;   // funding collected
     uint public investMin;   // minimum funding
     uint public investMax;   // maximum funding
-    uint public investKYC;   // KYC requirement
+    uint public investKYC = 1;   // KYC requirement
 
     //dividends
     uint[] public dividends; // dividens collected per period, growing array
@@ -263,6 +263,15 @@ contract PicoStocksAsset is StandardToken {
     // constructor
     /**
      * @dev Contract constructor
+     */
+    constructor() public {
+        owner = msg.sender;
+    }
+
+/* initial investment functions */
+
+    /**
+     * @dev Set first funding round parameters
      * @param _tokens number of tokens given to admin
      * @param _budget initial approved budget
      * @param _price price of 1 token in first founding round
@@ -274,8 +283,8 @@ contract PicoStocksAsset is StandardToken {
      * @param _picoid asset id on picostocks
      * @param _symbol asset symmbol on picostocks
      */
-    constructor(uint _tokens,uint _budget,uint _price,uint _from,uint _to,uint _min,uint _max,uint _kyc,uint _picoid,string memory _symbol) public {
-        owner = msg.sender;
+    function setFirstInvestPeriod(uint _tokens,uint _budget,uint _price,uint _from,uint _to,uint _min,uint _max,uint _kyc,uint _picoid,string memory _symbol) public onlyOwner {
+        require(investPrice == 0 && block.number < _from && _from < _to && _to < _from + weekBlocks*12 && _price > minPrice && _price < maxPrice && _max > 0 && _max > _min && _max < maxTokens );
         if(_tokens==0){
             _tokens=1;
         }
@@ -284,34 +293,16 @@ contract PicoStocksAsset is StandardToken {
         users[owner].tokens = uint120(_tokens);
         users[owner].lastProposalID = uint32(proposalID);
         users[custodian].lastProposalID = uint32(proposalID);
-        if(_price > 0){
-            setFirstInvestPeriod(_price,_from,_to,_min,_max,_kyc);
-        }
-        picoid = _picoid;
-        symbol = _symbol;
-        dividends.push(0); // not used
-        dividends.push(0); // current dividend
-    }
-
-/* initial investment functions */
-
-    /**
-     * @dev Set first funding round parameters
-     * @param _price price of 1 token in first founding round
-     * @param _from block number of start of funding round
-     * @param _to block number of end of funding round
-     * @param _min minimum number of tokens to sell
-     * @param _max maximum number of tokens to sell
-     * @param _kyc require KYC during first investment round
-     */
-    function setFirstInvestPeriod(uint _price,uint _from,uint _to,uint _min,uint _max,uint _kyc) public onlyOwner {
-        require(investPrice == 0 && block.number < _from && _from < _to && _to < _from + weekBlocks*12 && _price > minPrice && _price < maxPrice && _max > 0 && _max > _min && _max < maxTokens );
         investPrice = _price;
         investStart = _from;
         investEnd = _to;
         investMin = _min;
         investMax = _max;
         investKYC = _kyc;
+        picoid = _picoid;
+        symbol = _symbol;
+        dividends.push(0); // not used
+        dividends.push(0); // current dividend
     }
 
     /**
