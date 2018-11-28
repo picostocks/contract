@@ -16,7 +16,7 @@ Default ethereum contract for picostocks assets [ERCpico]
 
 The (optimized with solidity 0.4.25) contract deployment requires ca. 7M gas. The constructor requires 3 parameters that can not be changed later:
 -	"tokens": number of tokens assigned initially to the owner of the contract
--	"budget": initially approved budegt for the owner of the contract available only after succesfull first round
+-	"budget": initially approved budegt for the owner of the contract available only after succesfull first funding round
 -	"picoid": asset id on [picostocks.com](https://picostocks.com)
 -	"symbol": asset code on [picostocks.com](https://picostocks.com)
 The last 2 parameters can be ignored if the contract is not used by [picostocks.com](https://picostocks.com). In addition 6 parameters can be provided to automatically initiate the first funding round (ICO):
