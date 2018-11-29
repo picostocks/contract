@@ -1,6 +1,6 @@
 # PicoStocks Asset Contract
 
-Default ethereum contract for picostocks assets [ERCpico]
+Default ethereum contract for picostocks assets [ERCpico] version 0.2
 
 ## Main features
 
@@ -12,21 +12,30 @@ Default ethereum contract for picostocks assets [ERCpico]
 -	contract manager can be changed with > 50% of the votes (each token represents 1 vote)
 -	contract is compatible with the ERC20 standard
 
+## Contract compilation
+
+The contract was compiled with solidity version 0.5.0 with optimisation enabled.
+```
+solc --optimize --bin    pico.sol > pico.bin
+solc --optimize --abi    pico.sol > pico.abi
+solc --optimize --hashes pico.sol > pico.has
+```
+
 ## Contract deployment and initial funding round
 
-The (optimized with solidity 0.4.25) contract deployment requires ca. 7M gas. The constructor requires 3 parameters that can not be changed later:
--	"tokens": number of tokens assigned initially to the owner of the contract
--	"budget": initially approved budegt for the owner of the contract available only after succesfull first funding round
+The (optimized with solidity 0.5.0) contract deployment requires ca. 6M gas (see example below).
+For simplicity the constructor does not take any parameters.
+To start the contract the admin should call the "setFirstInvestPeriod" function. The function requires ca. 300k gas. The function takes the following parameters:
+-	"tokens": number of tokens assigned to the owner of the contract after success of first funding round (if sold at least "min" tokens), can be 0
+-	"budget": initially approved budegt for the owner of the contract available only after succesfull first funding round, can be 0
+-	"price": price of one token (in wei), if less than 65536 (0x10000) then set to 65536, can be 0
+-	"from": funding round starting block number, if zero then set to block number of the transaction, can be 0
+-	"length": duration of the funding round in blocks, if zero then set to 4 weeks (4*60*24*7*4 blocks), can be 0
+-	"min": required minimum number of tokens to sell (tokens assigned to the owner are not included in the calculation), can be 0
+-	"max": maximum number of tokens to sell (tokens assigned to the owner are not included in the calculation), can be 0 (in this case only the admin gets tokens assigned with the "tokens" parameter)
+-	"kyc": if not zero then an address whitelisting is required for each investor (address), can be 0
 -	"picoid": asset id on [picostocks.com](https://picostocks.com)
 -	"symbol": asset code on [picostocks.com](https://picostocks.com)
-The last 2 parameters can be ignored if the contract is not used by [picostocks.com](https://picostocks.com). In addition 6 parameters can be provided to automatically initiate the first funding round (ICO):
--	"price": price of one token (in wei)
--	"from": funding round starting block number
--	"to": funding round ending block number
--	"min": required minimum number of tokens to sell (tokens given initially to the owner are included in the calculation)
--	"max": maximum number of tokens to sell (tokens given initially to the owner are included in the calculation)
--	"kyc": if not zero then an address whitelisting is required for each investor (address)
-if the "price" is not zero the funding round will be programmed. If price equals zero the funding round parameters will be ignored. In this case the first founding round can be started with the "setFirstInvestPeriod" function by providing the 6 arguments.
 
 If the "kyc" parameter is set to a non-zero value then the owner has to call the "acceptKYC" function providing the address of the future investor before the investor can buy tokens.
 To buy tokens the investor calls the "invest" function or just sends ether to the contract. The number of sold tokens will be calculated and transferred to the investor and the remaining funds will be returned in the same call.
@@ -63,3 +72,6 @@ Token owner can buy and sell tokens by calling the "buy" and "sell" function res
 Buy and sell orders can be canceled with the "cancelBuy" and "cancelSell" functions by providing the order id as argument. The order ids can be found with the "findBuy" and "findSell" functions. Both functions require as argument at least the address used to place the order. Optionally the minimum and maximum price of the order can be provided. If they are not provided the order if of the order closest to the market price will be returned.
 Several functions can be used to analyze the order book. "ordersSell" and "ordersBuy" return the first 64 orders ("id","price","amount","address") and can optionally filter the orders by order address. Functions "whoSell", "whoBuy", "amountSell", "amountBuy", "priceSell", "priceBuy" take the order id as argument and return the "address", the "amount" and the "price". If no order id is provided then the order closest to the market is used.
 
+## Example of deployment
+
+An example of the contract deployment can be viewed on [etherscan.io](https://etherscan.io/tx/0x48f478f0e49e466b8a0b95612c1aede70ba6bc78b405a16f51bb22d127fd98f6).

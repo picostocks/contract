@@ -177,6 +177,7 @@ contract StandardToken is BasicToken, ERC20 {
 contract PicoStocksAsset is StandardToken {
 
     // metadata
+    string public constant version = "0.2";
     string public constant name = "PicoStocks Asset";
     uint public constant decimals = 0;
     uint public picoid = 0; // Asset ID on PicoStocks
@@ -208,6 +209,7 @@ contract PicoStocksAsset is StandardToken {
     address public custodian = 0xd720a4768CACE6d508d8B390471d83BA3aE6dD32;
 
     // investment parameters
+    uint public investOwner; // number of tokens assigned to owner if first round successfull
     uint public investPrice; // price of 1 token
     uint public investStart; // first block of funding round
     uint public investEnd;   // last block of funding round
@@ -276,26 +278,31 @@ contract PicoStocksAsset is StandardToken {
      * @param _budget initial approved budget
      * @param _price price of 1 token in first founding round
      * @param _from block number of start of funding round
-     * @param _to block number of end of funding round
+     * @param _length length of the funding round in blocks
      * @param _min minimum number of tokens to sell
      * @param _max maximum number of tokens to sell
      * @param _kyc require KYC during first investment round
      * @param _picoid asset id on picostocks
      * @param _symbol asset symmbol on picostocks
      */
-    function setFirstInvestPeriod(uint _tokens,uint _budget,uint _price,uint _from,uint _to,uint _min,uint _max,uint _kyc,uint _picoid,string memory _symbol) public onlyOwner {
-        require(investPrice == 0 && block.number < _from && _from < _to && _to < _from + weekBlocks*12 && _price > minPrice && _price < maxPrice && _max > 0 && _max > _min && _max < maxTokens );
-        if(_tokens==0){
-            _tokens=1;
-        }
-        totalSupply = _tokens;
+    function setFirstInvestPeriod(uint _tokens,uint _budget,uint _price,uint _from,uint _length,uint _min,uint _max,uint _kyc,uint _picoid,string memory _symbol) public onlyOwner {
+        require(investEnd == 0 && _price < maxPrice && _length <= weekBlocks * 12 && _min <= _max && _tokens.add(_max) < maxTokens );
+        investOwner = _tokens;
         acceptedBudget = _budget;
-        users[owner].tokens = uint120(_tokens);
         users[owner].lastProposalID = uint32(proposalID);
         users[custodian].lastProposalID = uint32(proposalID);
+        if(_price <= minPrice){
+          _price = minPrice+1;
+        }
         investPrice = _price;
+        if(_from < block.number){
+          _from = block.number;
+        }
         investStart = _from;
-        investEnd = _to;
+        if(_length == 0){
+          _length = weekBlocks * 4;
+        }
+        investEnd = _from + _length;
         investMin = _min;
         investMax = _max;
         investKYC = _kyc;
@@ -303,6 +310,9 @@ contract PicoStocksAsset is StandardToken {
         symbol = _symbol;
         dividends.push(0); // not used
         dividends.push(0); // current dividend
+        if(investMax == 0){
+          closeInvestPeriod();
+        }
     }
 
     /**
@@ -350,9 +360,9 @@ contract PicoStocksAsset is StandardToken {
      * @dev Return wei to token owners if first funding round failes
      */
     function disinvest() public {
-        require(0 < investEnd && investEnd < block.number && totalSupply < investMin);
+        require(investEnd < block.number && totalSupply < investMin && totalSupply>0 && proposalID > 1);
         payDividend((address(this).balance-totalWeis)/totalSupply); //CHANGED
-        investEnd += weekBlocks*4; // enable future dividend payment if contract has funds
+        investEnd = block.number + weekBlocks*4; // enable future dividend payment if contract has funds
     }
 
 /* management functions */
@@ -365,7 +375,7 @@ contract PicoStocksAsset is StandardToken {
      * @param _price price of 1 new token
      */
     function propose(uint _dividendpershare,uint _budget,uint _tokens,uint _price) external onlyOwner {
-        require(proposalBlock + weekBlocks*4 < block.number && 0 < investEnd && investEnd < block.number); //can not send more than 1 proposal per 28 days
+        require(proposalBlock + weekBlocks*4 < block.number && investEnd < block.number && proposalID > 1); //can not send more than 1 proposal per 28 days
         if(block.number>investEnd && investStart>0 && investPrice>0 && investMax>0){
           totalVotes=totalSupply;
           investStart=0;
@@ -373,7 +383,7 @@ contract PicoStocksAsset is StandardToken {
         }
         proposalVotesYes=0;
         proposalVotesNo=0;
-        proposalID=proposalID+1;
+        proposalID++;
         dividends.push(0);
         proposalBlock=block.number;
         proposalDividendPerShare=_dividendpershare;
@@ -387,7 +397,7 @@ contract PicoStocksAsset is StandardToken {
      * @dev Execute proposed plan if passed
      */
     function executeProposal() public {
-        require(proposalVotesYes > 0 && (proposalBlock + weekBlocks*4 < block.number || proposalVotesYes>totalVotes/2 || proposalVotesNo>totalVotes/2));
+        require(proposalVotesYes > 0 && (proposalBlock + weekBlocks*4 < block.number || proposalVotesYes>totalVotes/2 || proposalVotesNo>totalVotes/2) && proposalID > 1);
         //old require(proposalVotesYes > 0);
         emit LogVotes(proposalVotesYes,proposalVotesNo);
         if(proposalVotesYes >= proposalVotesNo && (proposalTokens==0 || proposalPrice>=investPrice || proposalVotesYes>totalVotes/2)){
@@ -415,7 +425,7 @@ contract PicoStocksAsset is StandardToken {
      * @param _tokens amount of new tokens to issue
      */
     function setNextInvestPeriod(uint _price,uint _tokens) internal {
-        require(totalSupply >= investMin && _price < maxPrice && totalSupply + _tokens < 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF);
+        require(totalSupply >= investMin && _price > 0 && _price < maxPrice && totalSupply + _tokens < 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF);
         investStart = block.number + weekBlocks*2;
         investEnd = block.number + weekBlocks*4;
         investPrice = _price; // too high price will disable future investments
@@ -427,8 +437,16 @@ contract PicoStocksAsset is StandardToken {
      * @dev Finish funding round and update voting power
      */
     function closeInvestPeriod() public {
-        require((block.number>investEnd || totalSupply>=investMax) && investStart>0 && investPrice>0 && investMax>0);
-        proposalID ++ ;
+        require((block.number>investEnd || totalSupply>=investMax) && investStart>0);
+        if(proposalID == 1){
+          totalSupply += investOwner;
+          users[owner].tokens += uint120(investOwner);
+          if(totalSupply == 0){
+            totalSupply = 1;
+            users[owner].tokens = 1;
+          }
+        }
+        proposalID++;
         dividends.push(0);
         totalVotes=totalSupply;
         investStart=0;
@@ -451,7 +469,7 @@ contract PicoStocksAsset is StandardToken {
           return 0;}
         totalWeis += newdividend;
         dividends[proposalID] = _wei;
-        proposalID ++ ;
+        proposalID++;
         dividends.push(0);
         totalVotes=totalSupply;
         emit LogDividend(_wei);
