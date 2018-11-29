@@ -25,9 +25,9 @@ solc --optimize --hashes pico.sol > pico.has
 
 The (optimized with solidity 0.5.0) contract deployment requires ca. 6M gas (see example below).
 For simplicity the constructor does not take any parameters.
-To start the contract the admin should call the "setFirstInvestPeriod" function. The function requires ca. 300k gas. The function takes the following parameters:
+To start the contract the admin should call the "setFirstInvestPeriod" function. The function requires ca. 300k gas (less than 400k). The function takes the following parameters:
 -	"tokens": number of tokens assigned to the owner of the contract after success of first funding round (if sold at least "min" tokens), can be 0
--	"budget": initially approved budegt for the owner of the contract available only after succesfull first funding round, can be 0
+-	"budget": initially approved budget for the owner of the contract available only after successful first funding round, can be 0
 -	"price": price of one token (in wei), if less than 65536 (0x10000) then set to 65536, can be 0
 -	"from": funding round starting block number, if zero then set to block number of the transaction, can be 0
 -	"length": duration of the funding round in blocks, if zero then set to 4 weeks (4 * 60 * 24 * 7 * 4 blocks), can be 0
