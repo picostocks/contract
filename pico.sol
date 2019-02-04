@@ -90,9 +90,9 @@ contract BasicToken is ERC20Basic {
     return uint(users[_owner].asks);
   }
   /**
-  * @dev Gets the amount of tokens offered for sale (in asks)
+  * @dev Gets the vote for new administrator cast by the user
   * @param _owner The address to query.
-  * @return An uint representing the amount offered by the passed address.
+  * @return The address of the admin voted for by the user
   */
   function voteOf(address _owner) public view returns (uint) {
     return uint(users[_owner].votes);
